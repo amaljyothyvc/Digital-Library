@@ -1,0 +1,60 @@
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcrypt');
+const Database = require('better-sqlite3');
+const app = express();
+const db = new Database('./library.db');
+db.pragma('foreign_keys = ON');
+db.exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL)');
+db.exec('CREATE TABLE IF NOT EXISTS books (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL, author TEXT NOT NULL, pages INTEGER NOT NULL, status TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)');
+console.log('Database ready');
+app.use(cors());
+app.use(express.json());
+app.use(express.static('PUBLIC'));
+app.post('/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const statement = db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)');
+    const result = statement.run(username, email, hashedPassword);
+    console.log('User created:', result.lastInsertRowid);
+    res.status(201).json({ message: 'User registered successfully!', userId: result.lastInsertRowid });
+  } catch (error) {
+    console.error('Registration error:', error);
+    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'Username or email already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+app.post('/books', (req, res) => {
+  try {
+    const { user_id, title, author, pages, status } = req.body;
+    if (!user_id || !title || !author || !pages || !status) {
+      return res.status(400).json({ error: 'All book fields are required' });
+    }
+    const statement = db.prepare('INSERT INTO books (user_id, title, author, pages, status) VALUES (?, ?, ?, ?, ?)');
+    const result = statement.run(user_id, title, author, pages, status);
+    res.status(201).json({ message: 'Book added successfully', bookId: result.lastInsertRowid });
+  } catch (error) {
+    console.error('Book error:', error);
+    res.status(500).json({ error: 'Could not add book' });
+  }
+});
+app.get('/books/:userId', (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const statement = db.prepare('SELECT id, user_id, title, author, pages, status FROM books WHERE user_id = ?');
+    const books = statement.all(userId);
+    res.json(books);
+  } catch (error) {
+    console.error('Get books error:', error);
+    res.status(500).json({ error: 'Could not retrieve books' });
+  }
+});
+app.listen(3000, () => {
+  console.log('Server running on http://localhost:3000');
+});
