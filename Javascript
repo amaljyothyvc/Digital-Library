@@ -1,0 +1,193 @@
+console.log("SCRIPT VERSION 101 LOADED");
+
+let currentUserId = null;
+
+const form = document.getElementById("form");
+const nextButton = document.getElementById("nextButton");
+
+const step1 = document.getElementById("step1");
+const step2 = document.getElementById("step2");
+
+const librarySection = document.getElementById("librarySection");
+const library = document.getElementById("library");
+const bookForm = document.getElementById("bookForm");
+
+nextButton.addEventListener("click", function (event) {
+    event.preventDefault();
+
+    const username = document.getElementById("username").value.trim();
+    const email = document.getElementById("email").value.trim();
+
+    if (!username || !email) {
+        alert("Please enter your username and email.");
+        return;
+    }
+
+    step1.hidden = true;
+    step2.hidden = false;
+});
+
+form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const username = document.getElementById("username").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    const confirmPassword = document.getElementById("confirmPassword").value;
+
+    if (password !== confirmPassword) {
+        alert("Passwords do not match!");
+        return;
+    }
+
+    const formData = {
+        username: username,
+        email: email,
+        password: password
+    };
+
+    try {
+        const response = await fetch("http://localhost:3000/register", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(formData)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            console.log("Registration successful:", result);
+
+            currentUserId = result.userId;
+
+            console.log("Current user ID:", currentUserId);
+
+            alert("Registration successful!");
+
+            form.hidden = true;
+            librarySection.hidden = false;
+
+            form.reset();
+
+            loadBooks();
+        } else {
+            console.error("Registration failed:", result);
+
+            alert(result.error || "Registration failed.");
+        }
+    } catch (error) {
+        console.error("Network error:", error);
+
+        alert("Cannot connect to server.");
+    }
+});
+
+function displayBook(book) {
+    const card = document.createElement("div");
+    card.classList.add("book-card");
+
+    const title = document.createElement("h2");
+    title.textContent = book.title;
+
+    const author = document.createElement("p");
+    author.textContent = `Author: ${book.author}`;
+
+    const pages = document.createElement("p");
+    pages.textContent = `Pages: ${book.pages}`;
+
+    const status = document.createElement("p");
+    status.textContent = `Status: ${book.status}`;
+
+    card.appendChild(title);
+    card.appendChild(author);
+    card.appendChild(pages);
+    card.appendChild(status);
+
+    library.appendChild(card);
+}
+
+async function loadBooks() {
+    if (!currentUserId) {
+        console.error("No current user ID.");
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `http://localhost:3000/books/${currentUserId}`
+        );
+
+        if (!response.ok) {
+            throw new Error("Failed to load books");
+        }
+
+        const books = await response.json();
+
+        console.log("Books loaded:", books);
+
+        library.innerHTML = "";
+
+        books.forEach(function (book) {
+            displayBook(book);
+        });
+    } catch (error) {
+        console.error("Could not load books:", error);
+    }
+}
+
+bookForm.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    if (!currentUserId) {
+        alert("Please register first.");
+        return;
+    }
+
+    const title = document.getElementById("title").value.trim();
+    const author = document.getElementById("author").value.trim();
+    const pages = document.getElementById("pages").value;
+    const status = document.getElementById("status").value;
+
+    if (!title || !author || !pages) {
+        alert("Please fill in all book fields.");
+        return;
+    }
+
+    try {
+        const response = await fetch("http://localhost:3000/books", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                user_id: currentUserId,
+                title: title,
+                author: author,
+                pages: Number(pages),
+                status: status
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            console.log("Book saved:", result);
+
+            alert("Book added successfully!");
+
+            bookForm.reset();
+
+            loadBooks();
+        } else {
+            console.error("Book save failed:", result);
+
+            alert(result.error || "Could not save book.");
+        }
+    } catch (error) {
+        console.error("Network error:", error);
+
+        alert("Cannot connect to server.");
+    }
+});
